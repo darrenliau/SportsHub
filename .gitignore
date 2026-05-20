@@ -1,0 +1,15 @@
+# Node
+node_modules/
+.env
+
+# .NET
+bin/
+obj/
+*.db
+
+# IDE
+.vscode/
+.idea/
+
+# logs
+logs/
