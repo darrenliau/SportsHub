@@ -2,13 +2,9 @@ import './App.css'
 import { useState, useEffect } from 'react'
 import { Container, AppBar, Toolbar, Typography, Button, FormControl, InputLabel, Select, MenuItem } from '@mui/material'
 import CourtGrid from './components/CourtGrid'
-import { format, parse, startOfWeek, getDay } from 'date-fns'
-import * as enUS from 'date-fns/locale/en-US'
 import BookingDialog from './components/BookingDialog'
 import OperatorDashboard from './pages/OperatorDashboard'
-import { fetchBookings, fetchCourts, createBooking, updateBooking } from './services/api'
-
-const locales = { 'en-US': enUS }
+import { fetchBookings, fetchCourts, createBooking } from './services/api'
 
 type Event = { id: string; title: string; start: Date; end: Date; courtId: number }
 
@@ -44,17 +40,7 @@ export default function App() {
     try { await createBooking({ title: data.title, start: data.start, end: data.end, courtId: selectedCourt }); await loadBookings(); } catch (err) { const message = await getErrorMessage(err); alert('Failed to create booking: ' + message) }
   }
 
-  const handleEventResize = async (resize: any) => {
-    const id = (resize.event as any).id
-    const courtId = (resize.event as any).courtId
-    try { await updateBooking(id, { id: Number(id), title: resize.event.title, start: resize.start, end: resize.end, courtId }); await loadBookings(); } catch (err) { const message = await getErrorMessage(err); alert('Failed to update booking: ' + message); await loadBookings(); }
-  }
 
-  const handleEventDrop = async (drop: any) => {
-    const id = (drop.event as any).id
-    const courtId = (drop.event as any).courtId
-    try { await updateBooking(id, { id: Number(id), title: drop.event.title, start: drop.start, end: drop.end, courtId }); await loadBookings(); } catch (err) { const message = await getErrorMessage(err); alert('Failed to move booking: ' + message); await loadBookings(); }
-  }
 
   return (
     <div>
@@ -64,7 +50,7 @@ export default function App() {
           <FormControl variant="standard" sx={{ mr: 2, minWidth: 140 }}>
             <InputLabel id="court-select-label">Court</InputLabel>
             <Select labelId="court-select-label" value={selectedCourt ?? ''} onChange={e=>setSelectedCourt(Number(e.target.value))}>
-              {courts.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+              {courts.map(c => <MenuItem key={c.courtId} value={c.courtId}>{c.courtName}</MenuItem>)}
             </Select>
           </FormControl>
           <Button color="inherit" onClick={() => { loadBookings() }}>Reload</Button>

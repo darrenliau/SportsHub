@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 namespace backend
 {
@@ -24,13 +27,55 @@ namespace backend
             {
                 options.AddPolicy("AllowDev", builder =>
                 {
-                    builder.WithOrigins("http://localhost:5173").AllowAnyHeader().AllowAnyMethod();
+                    builder.WithOrigins("http://localhost:5173", "http://localhost:5174").AllowAnyHeader().AllowAnyMethod();
                 });
             });
 
-            services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
+            services.AddMvc(options => { })
+                .AddJsonOptions(opts => 
+                {
+                    opts.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
+                })
+                .SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
+
             var conn = Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=app.db";
             services.AddDbContext<AppDbContext>(options => options.UseSqlite(conn));
+
+            // JWT Authentication
+            var key = Configuration["Jwt:Key"] ?? "dev-secret-change-me";
+            services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            }).AddJwtBearer(options =>
+            {
+                options.RequireHttpsMetadata = false;
+                options.SaveToken = true;
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
+                    ValidateIssuer = true,
+                    ValidIssuer = Configuration["Jwt:Issuer"] ?? "SportsHub",
+                    ValidateAudience = true,
+                    ValidAudience = Configuration["Jwt:Audience"] ?? "SportsHub",
+                    ValidateLifetime = true
+                };
+
+                // Allow token from cookie named 'accessToken' when Authorization header is absent
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var accessToken = context.Request.Cookies["accessToken"];
+                        if (!string.IsNullOrEmpty(accessToken))
+                        {
+                            context.Token = accessToken;
+                        }
+                        return System.Threading.Tasks.Task.CompletedTask;
+                    }
+                };
+            });
         }
 
         public void Configure(IApplicationBuilder app, IHostingEnvironment env)
@@ -51,6 +96,7 @@ namespace backend
             }
 
             app.UseCors("AllowDev");
+            app.UseAuthentication();
             app.UseMvc();
         }
     }
