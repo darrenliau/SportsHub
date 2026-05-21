@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 
 namespace backend.Controllers
 {
@@ -25,67 +26,117 @@ namespace backend.Controllers
             _config = config;
         }
 
+        // Handle CORS preflight requests
+        [HttpOptions]
+        [AllowAnonymous]
+        public IActionResult Preflight()
+        {
+            return Ok();
+        }
+
+        [HttpOptions("login")]
+        [AllowAnonymous]
+        public IActionResult LoginPreflight()
+        {
+            return Ok();
+        }
+
+        [HttpOptions("register")]
+        [AllowAnonymous]
+        public IActionResult RegisterPreflight()
+        {
+            return Ok();
+        }
+
+        [HttpOptions("refresh")]
+        [AllowAnonymous]
+        public IActionResult RefreshPreflight()
+        {
+            return Ok();
+        }
+
         [HttpPost("register")]
+        [AllowAnonymous]
         public IActionResult Register([FromBody] RegisterDto dto)
         {
-            if (string.IsNullOrWhiteSpace(dto.Username) || string.IsNullOrWhiteSpace(dto.Password) || string.IsNullOrWhiteSpace(dto.Email))
-                return BadRequest("username, email and password required");
-
-            if (_db.Users.Any(u => u.Username == dto.Username || u.Email == dto.Email))
-                return BadRequest("User with that username or email already exists");
-
-            var user = new User
+            try
             {
-                Username = dto.Username,
-                Email = dto.Email,
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
-                Role = "customer",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
+                if (string.IsNullOrWhiteSpace(dto.Username) || string.IsNullOrWhiteSpace(dto.Password) || string.IsNullOrWhiteSpace(dto.Email))
+                    return BadRequest(new { error = "Username, email and password are required" });
 
-            _db.Users.Add(user);
-            _db.SaveChanges();
+                if (_db.Users.Any(u => u.Username == dto.Username))
+                    return BadRequest(new { error = "Username already exists" });
 
-            return Ok(new { user.Id, user.Username, user.Email });
+                if (_db.Users.Any(u => u.Email == dto.Email))
+                    return BadRequest(new { error = "Email already exists" });
+
+                var user = new User
+                {
+                    Username = dto.Username,
+                    Email = dto.Email,
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
+                    Role = "customer",
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _db.Users.Add(user);
+                _db.SaveChanges();
+
+                return Ok(new { message = "Registration successful", user = new { user.Id, user.Username, user.Email, user.Role } });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = "Registration failed", details = ex.Message });
+            }
         }
 
         [HttpPost("login")]
+        [AllowAnonymous]
         public IActionResult Login([FromBody] LoginDto dto)
         {
-            if (string.IsNullOrWhiteSpace(dto.Username) || string.IsNullOrWhiteSpace(dto.Password))
-                return BadRequest("username and password required");
-
-            var user = _db.Users.SingleOrDefault(u => u.Username == dto.Username || u.Email == dto.Username);
-            if (user == null) return Unauthorized("Invalid credentials");
-
-            if (!BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash)) return Unauthorized("Invalid credentials");
-
-            var accessToken = GenerateJwtToken(user);
-            var minutes = int.TryParse(_config["Jwt:AccessTokenMinutes"], out var m) ? m : 15;
-
-            // create refresh token
-            var refreshToken = new RefreshToken
+            try
             {
-                Token = GenerateRefreshTokenString(),
-                UserId = user.Id,
-                CreatedAt = DateTime.UtcNow,
-                ExpiresAt = DateTime.UtcNow.AddDays(int.TryParse(_config["Jwt:RefreshTokenDays"], out var d) ? d : 7)
-            };
-            _db.RefreshTokens.Add(refreshToken);
-            _db.SaveChanges();
+                if (string.IsNullOrWhiteSpace(dto.Username) || string.IsNullOrWhiteSpace(dto.Password))
+                    return BadRequest(new { error = "Username and password are required" });
 
-            // set cookies (httpOnly)
-            var accessCookieOptions = new CookieOptions { HttpOnly = true, Expires = DateTime.UtcNow.AddMinutes(minutes), SameSite = SameSiteMode.Lax, Secure = false };
-            Response.Cookies.Append("accessToken", accessToken, accessCookieOptions);
+                var user = _db.Users.SingleOrDefault(u => u.Username == dto.Username || u.Email == dto.Username);
+                if (user == null) return Unauthorized(new { error = "Username or email not found" });
 
-            var refreshCookieOptions = new CookieOptions { HttpOnly = true, Expires = refreshToken.ExpiresAt, SameSite = SameSiteMode.Lax, Secure = false };
-            Response.Cookies.Append("refreshToken", refreshToken.Token, refreshCookieOptions);
+                if (!BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash)) 
+                    return Unauthorized(new { error = "Password is incorrect" });
 
-            return Ok(new { user = new { user.Id, user.Username, user.Email, user.Role } });
+                var accessToken = GenerateJwtToken(user);
+                var minutes = int.TryParse(_config["Jwt:AccessTokenMinutes"], out var m) ? m : 15;
+
+                // create refresh token
+                var refreshToken = new RefreshToken
+                {
+                    Token = GenerateRefreshTokenString(),
+                    UserId = user.Id,
+                    CreatedAt = DateTime.UtcNow,
+                    ExpiresAt = DateTime.UtcNow.AddDays(int.TryParse(_config["Jwt:RefreshTokenDays"], out var d) ? d : 7)
+                };
+                _db.RefreshTokens.Add(refreshToken);
+                _db.SaveChanges();
+
+                // set cookies (httpOnly)
+                var accessCookieOptions = new CookieOptions { HttpOnly = true, Expires = DateTime.UtcNow.AddMinutes(minutes), SameSite = SameSiteMode.Lax, Secure = false };
+                Response.Cookies.Append("accessToken", accessToken, accessCookieOptions);
+
+                var refreshCookieOptions = new CookieOptions { HttpOnly = true, Expires = refreshToken.ExpiresAt, SameSite = SameSiteMode.Lax, Secure = false };
+                Response.Cookies.Append("refreshToken", refreshToken.Token, refreshCookieOptions);
+
+                return Ok(new { message = "Login successful", user = new { user.Id, user.Username, user.Email, user.Role } });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = "Login failed", details = ex.Message });
+            }
         }
 
         [HttpPost("refresh")]
+        [AllowAnonymous]
         public IActionResult Refresh([FromBody] RefreshRequestDto dto)
         {
             var token = dto.RefreshToken;

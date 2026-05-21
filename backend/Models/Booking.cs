@@ -20,5 +20,7 @@ namespace Backend.Models
 
         public string CustomerName { get; set; }
         public string CustomerEmail { get; set; }
+        
+        public string Status { get; set; } = "active";  // "active" or "deleted"
     }
 }

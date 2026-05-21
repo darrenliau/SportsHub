@@ -10,23 +10,31 @@ namespace Backend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]
     public class BookingsController : ControllerBase
     {
         private readonly AppDbContext _db;
         public BookingsController(AppDbContext db) { _db = db; }
 
+        // Handle CORS preflight requests
+        [HttpOptions]
+        [AllowAnonymous]
+        public IActionResult Preflight()
+        {
+            return Ok();
+        }
+
         [HttpGet]
         [AllowAnonymous]
-        public async Task<IActionResult> GetAll() => Ok(await _db.Bookings.Include(b=>b.Court).ToListAsync());
+        public async Task<IActionResult> GetAll() => Ok(await _db.Bookings.Include(b=>b.Court).Where(b => b.Status != "deleted").ToListAsync());
 
         [HttpPost]
+        [Authorize]
         public async Task<IActionResult> Create([FromBody] Booking booking)
         {
             if (booking.End <= booking.Start) return BadRequest("End must be after start");
 
-            // Check overlap for same court
-            var overlap = await _db.Bookings.AnyAsync(b => b.CourtId == booking.CourtId && booking.Start < b.End && booking.End > b.Start);
+            // Check overlap for same court (excluding deleted bookings)
+            var overlap = await _db.Bookings.AnyAsync(b => b.Status != "deleted" && b.CourtId == booking.CourtId && booking.Start < b.End && booking.End > b.Start);
             if (overlap) return Conflict(new { message = "Timeslot not available" });
 
             _db.Bookings.Add(booking);
@@ -41,8 +49,8 @@ namespace Backend.Controllers
             if (existing == null) return NotFound();
             if (booking.End <= booking.Start) return BadRequest("End must be after start");
 
-            // Check overlap excluding this booking
-            var overlap = await _db.Bookings.AnyAsync(b => b.Id != id && b.CourtId == booking.CourtId && booking.Start < b.End && booking.End > b.Start);
+            // Check overlap excluding this booking and deleted bookings
+            var overlap = await _db.Bookings.AnyAsync(b => b.Id != id && b.Status != "deleted" && b.CourtId == booking.CourtId && booking.Start < b.End && booking.End > b.Start);
             if (overlap) return Conflict(new { message = "Timeslot not available" });
 
             existing.Start = booking.Start;
@@ -54,14 +62,14 @@ namespace Backend.Controllers
             return Ok(existing);
         }
 
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int id)
+        [HttpPost("{id}/cancel")]
+        public async Task<IActionResult> Cancel(int id)
         {
             var existing = await _db.Bookings.FindAsync(id);
             if (existing == null) return NotFound();
-            _db.Bookings.Remove(existing);
+            existing.Status = "deleted";
             await _db.SaveChangesAsync();
-            return NoContent();
+            return Ok(new { message = "Booking cancelled" });
         }
     }
 }

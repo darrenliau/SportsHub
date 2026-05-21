@@ -29,16 +29,25 @@ export default function CourtGrid({ courts, bookings, onSlotClick, weekStart = n
     })
   }
 
+  const isSlotPassed = (slotStart: Date) => {
+    const now = new Date()
+    const slotEnd = new Date(slotStart.getTime() + 60 * 60 * 1000)
+    return slotEnd <= now
+  }
+
   const selDay = days[selectedDay]
 
   return (
-    <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+    <Box sx={{ display: 'flex', gap: 0, mt: 2, ml: 2, mr: 2, height: '100%' }}>
       {/* Left column: date headers stacked and times column */}
       <Box sx={{ flex: '0 0 160px' }}>
         <Box sx={{ height: 64, display: 'flex', alignItems: 'center', pl: 2 }}>
           <Typography variant="h5">Book a Court</Typography>
         </Box>
         <Box sx={{ borderTop: '1px solid #e0e0e0' }}>
+          <Box sx={{ height: 64, display: 'flex', alignItems: 'center', pl: 2, color: '#667085' }}>
+            <Typography variant="body2">Time</Typography>
+          </Box>
           {hours.map((h) => (
             <Box key={h} sx={{ height: 64, display: 'flex', alignItems: 'center', pl: 2, color: '#667085' }}>
               <Typography variant="body2">{fmtTime(h)}</Typography>
@@ -50,11 +59,11 @@ export default function CourtGrid({ courts, bookings, onSlotClick, weekStart = n
       {/* Right: main grid with horizontal scroll */}
       <Box sx={{ overflowX: 'auto', flex: 1 }}>
         {/* Top: date headers acting as tabs */}
-        <Box sx={{ display: 'flex', minWidth: Math.max(400, courts.length * 160), borderBottom: '1px solid #e6eef6', pl: 2 }}>
+        <Box sx={{ display: 'flex', minWidth: Math.max(400, courts.length * 160), borderBottom: '1px solid #e6eef6', pl: 2, height: 64 }}>
           {days.map((d, idx) => {
             const isSel = idx === selectedDay
             return (
-              <Box key={idx} onClick={() => setSelectedDay(idx)} role="button" sx={{ flex: '0 0 120px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 1, cursor: 'pointer', borderBottom: isSel ? '3px solid #1976d2' : '3px solid transparent', bgcolor: isSel ? '#f5faff' : 'transparent' }}>
+              <Box key={idx} onClick={() => setSelectedDay(idx)} role="button" sx={{ flex: '0 0 120px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderBottom: isSel ? '3px solid #1976d2' : '3px solid transparent', bgcolor: isSel ? '#f5faff' : 'transparent' }}>
                 <Typography variant="subtitle1">{d.toLocaleDateString(undefined, { weekday: 'short' })}</Typography>
                 <Box sx={{ mt: 0.5 }}>
                   <Typography variant="subtitle2">{d.toLocaleDateString()}</Typography>
@@ -66,9 +75,9 @@ export default function CourtGrid({ courts, bookings, onSlotClick, weekStart = n
         </Box>
 
         {/* Court column headers for selected date */}
-        <Box sx={{ display: 'flex', minWidth: Math.max(800, courts.length * 160), borderBottom: '1px solid #f0f4f8', pl: 2 }}>
+        <Box sx={{ display: 'flex', minWidth: Math.max(800, courts.length * 160), borderBottom: '1px solid #f0f4f8', pl: 2, height: 64 }}>
           {courts.map((c: Court) => (
-            <Box key={c.courtId} sx={{ flex: '0 0 160px', display: 'flex', alignItems: 'center', justifyContent: 'center', py: 1 }}>
+            <Box key={c.courtId} sx={{ flex: '0 0 160px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{c.courtName}</Typography>
             </Box>
           ))}
@@ -82,11 +91,12 @@ export default function CourtGrid({ courts, bookings, onSlotClick, weekStart = n
                 const slotStart = new Date(selDay)
                 slotStart.setHours(h, 0, 0, 0)
                 const booking = bookingForCell(c.courtId, slotStart)
+                const isPassed = isSlotPassed(slotStart)
                 return (
                   <Box key={`${selectedDay}-${c.courtId}-${h}`} sx={{ flex: '0 0 160px', p: 1 }}>
-                    <Paper elevation={0} sx={{ height: 48, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: booking ? '#FEEBD4' : '#E9EEF6', cursor: 'pointer' }} onClick={() => onSlotClick(slotStart, new Date(slotStart.getTime() + 60 * 60 * 1000), c.courtId)}>
-                      <Typography variant="body2" sx={{ color: booking ? '#BF4A00' : '#7D8FA8', fontWeight: 700 }}>
-                        {booking ? booking.title : 'N/A'}
+                    <Paper elevation={0} sx={{ height: 48, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: isPassed ? '#D3D3D3' : booking ? '#FEEBD4' : '#016630', cursor: isPassed ? 'not-allowed' : 'pointer', opacity: isPassed ? 0.6 : 1 }} onClick={() => !isPassed && onSlotClick(slotStart, new Date(slotStart.getTime() + 60 * 60 * 1000), c.courtId)}>
+                      <Typography variant="body2" sx={{ color: isPassed ? '#666666' : booking ? '#BF4A00' : '#FFFFFF', fontWeight: 700 }}>
+                        {isPassed ? 'N/A' : booking ? booking.title : 'Available'}
                       </Typography>
                     </Paper>
                   </Box>

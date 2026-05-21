@@ -60,7 +60,7 @@ export async function updateBooking(id: any, payload: any) {
 }
 
 export async function deleteBooking(id: any) {
-  const res = await request(`${API_BASE}/bookings/${id}`, { method: 'DELETE' })
+  const res = await request(`${API_BASE}/bookings/${id}/cancel`, { method: 'POST' })
   if (!res.ok) throw res
   return true
 }
@@ -98,4 +98,61 @@ export async function logout() {
     await fetch(`${API_BASE}/auth/logout`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include' })
   } catch (e) { console.warn('logout error', e) }
   localStorage.removeItem('user')
+}
+
+// Court management (operator only)
+export async function fetchAllCourts() {
+  const res = await request(`${API_BASE}/courts/admin/all`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+  return await res.json()
+}
+
+export async function createCourt(courtName: string, locationId: number) {
+  const res = await request(`${API_BASE}/courts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ courtName, locationId }),
+  })
+  if (!res.ok) throw res
+  return await res.json()
+}
+
+export async function updateCourt(courtId: number, courtName?: string, locationId?: number, enabled?: boolean) {
+  const res = await request(`${API_BASE}/courts/${courtId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ courtName, locationId, enabled }),
+  })
+  if (!res.ok) throw res
+  return await res.json()
+}
+
+// Locations
+export async function fetchLocations() {
+  const res = await request(`${API_BASE}/locations`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+  return await res.json()
+}
+
+// Blackout dates (operator only)
+export async function fetchBlackoutDates(courtId: number) {
+  const res = await request(`${API_BASE}/courts/${courtId}/blackouts`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+  return await res.json()
+}
+
+export async function createBlackoutDate(courtId: number, dateStart: string, dateEnd: string, reason?: string) {
+  const res = await request(`${API_BASE}/courts/${courtId}/blackouts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dateStart, dateEnd, reason }),
+  })
+  if (!res.ok) throw res
+  return await res.json()
+}
+
+export async function deleteBlackoutDate(courtId: number, blackoutId: number) {
+  const res = await request(`${API_BASE}/courts/${courtId}/blackouts/${blackoutId}`, { method: 'DELETE' })
+  if (!res.ok) throw res
+  return true
 }

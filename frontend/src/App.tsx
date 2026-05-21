@@ -1,10 +1,11 @@
 import './App.css'
 import { useState, useEffect } from 'react'
-import { Container, AppBar, Toolbar, Typography, Button, FormControl, InputLabel, Select, MenuItem, Box, Menu, Avatar, CircularProgress } from '@mui/material'
-import LogoutIcon from '@mui/icons-material/Logout'
+import { Typography, Button, Box, CircularProgress } from '@mui/material'
 import CourtGrid from './components/CourtGrid'
 import BookingDialog from './components/BookingDialog'
-import OperatorDashboard from './pages/OperatorDashboard'
+import ManagementDashboard from './pages/ManagementDashboard'
+import BookingDashboard from './pages/BookingDashboard'
+import Sidebar from './components/Sidebar'
 import Login from './components/Login'
 import Register from './components/Register'
 import { fetchBookings, fetchCourts, createBooking, logout, refreshToken } from './services/api'
@@ -18,13 +19,12 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [authMode, setAuthMode] = useState<'login'|'register'>('login')
-  const [view, setView] = useState<'calendar'|'dashboard'>('calendar')
+  const [view, setView] = useState<'calendar'|'dashboard'|'management'>('calendar')
   const [events, setEvents] = useState<Event[]>([])
   const [dialogOpen, setDialogOpen] = useState(false)
   const [slotInfo, setSlotInfo] = useState<{ start?: Date; end?: Date; courtId?: number } | null>(null)
   const [courts, setCourts] = useState<any[]>([])
   const [selectedCourt, setSelectedCourt] = useState<number | null>(null)
-  const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null)
 
   useEffect(() => { 
     const initAuth = async () => {
@@ -61,18 +61,36 @@ export default function App() {
   const handleSaveBooking = async (data: { title: string; start: Date; end: Date }) => {
     const courtId = slotInfo?.courtId || selectedCourt;
     if (!courtId) return alert('Select a court');
-    try { await createBooking({ title: data.title, start: data.start, end: data.end, courtId }); await loadBookings(); setDialogOpen(false); } catch (err) { const message = await getErrorMessage(err); alert('Failed to create booking: ' + message) }
+    try {
+      // Convert local dates to ISO strings (local time, not UTC)
+      const toLocalISOString = (d: Date) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        const seconds = String(d.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+      };
+      await createBooking({ 
+        title: data.title, 
+        start: toLocalISOString(data.start), 
+        end: toLocalISOString(data.end), 
+        courtId 
+      }); 
+      await loadBookings(); 
+      setDialogOpen(false); 
+    } catch (err) { 
+      const message = await getErrorMessage(err); 
+      alert('Failed to create booking: ' + message) 
+    }
   }
-
-  const handleUserMenuOpen = (e: React.MouseEvent<HTMLElement>) => setUserMenuAnchor(e.currentTarget)
-  const handleUserMenuClose = () => setUserMenuAnchor(null)
 
   const handleLogout = async () => {
     try {
       await logout()
       setUser(null)
       setAuthMode('login')
-      setUserMenuAnchor(null)
     } catch (e) {
       alert('Logout failed')
     }
@@ -105,38 +123,22 @@ export default function App() {
   }
 
   return (
-    <div>
-      <AppBar position="static">
-        <Toolbar>
-          <Typography variant="h6" sx={{ flex: 1 }}>SportsHub — Badminton Booking</Typography>
-          <FormControl variant="standard" sx={{ mr: 2, minWidth: 140 }}>
-            <InputLabel id="court-select-label">Court</InputLabel>
-            <Select labelId="court-select-label" value={selectedCourt ?? ''} onChange={e=>setSelectedCourt(Number(e.target.value))}>
-              {courts.map(c => <MenuItem key={c.courtId} value={c.courtId}>{c.courtName}</MenuItem>)}
-            </Select>
-          </FormControl>
-          <Button color="inherit" onClick={() => { loadBookings() }}>Reload</Button>
-          <Button color="inherit" onClick={()=>setView(view==='calendar' ? 'dashboard' : 'calendar')}>{view==='calendar' ? 'Dashboard' : 'Calendar'}</Button>
-          <Button color="inherit" onClick={handleUserMenuOpen} sx={{ ml: 2, display: 'flex', gap: 1, alignItems: 'center' }}>
-            <Avatar sx={{ width: 32, height: 32, bgcolor: '#1976d2' }}>{user.username.charAt(0).toUpperCase()}</Avatar>
-            {user.username}
-          </Button>
-          <Menu anchorEl={userMenuAnchor} open={Boolean(userMenuAnchor)} onClose={handleUserMenuClose}>
-            <MenuItem disabled>{user.email}</MenuItem>
-            <MenuItem disabled>Role: {user.role}</MenuItem>
-            <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}><LogoutIcon sx={{ mr: 1, fontSize: 20 }} /> Logout</MenuItem>
-          </Menu>
-        </Toolbar>
-      </AppBar>
-      {view==='calendar' ? (
-        <Container sx={{ mt: 3 }}>
-          <CourtGrid courts={courts} bookings={events} weekStart={new Date()} onSlotClick={(start, end, courtId) => handleSelectSlot({ start, end, courtId })} />
-        </Container>
-      ) : (
-        <OperatorDashboard onDelete={loadBookings} />
-      )}
+    <Box sx={{ display: 'flex', height: '100vh' }}>
+      <Sidebar user={user} view={view} onNavigate={(newView) => setView(newView)} onLogout={handleLogout} />
+      
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+        {view === 'calendar' ? (
+          <Box sx={{ flex: 1 }}>
+            <CourtGrid courts={courts} bookings={events} weekStart={new Date()} onSlotClick={(start, end, courtId) => handleSelectSlot({ start, end, courtId })} />
+          </Box>
+        ) : view === 'management' ? (
+          <ManagementDashboard />
+        ) : (
+          <BookingDashboard onDelete={loadBookings} />
+        )}
+      </Box>
 
-      <BookingDialog open={dialogOpen} initialStart={slotInfo?.start} initialEnd={slotInfo?.end} onClose={() => setDialogOpen(false)} onSave={handleSaveBooking} />
-    </div>
+      <BookingDialog open={dialogOpen} initialStart={slotInfo?.start} initialEnd={slotInfo?.end} username={user?.username} onClose={() => setDialogOpen(false)} onSave={handleSaveBooking} />
+    </Box>
   )
 }

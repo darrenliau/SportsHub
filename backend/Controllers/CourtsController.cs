@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -16,11 +17,23 @@ namespace Backend.Controllers
         private readonly AppDbContext _db;
         public CourtsController(AppDbContext db) { _db = db; }
 
+        // Handle CORS preflight requests
+        [HttpOptions]
+        [AllowAnonymous]
+        public IActionResult Preflight()
+        {
+            return Ok();
+        }
+
         [HttpGet]
         [AllowAnonymous]
         public async Task<IActionResult> GetAll() => Ok(await _db.Courts.Include(c => c.Location).Where(c => c.Enabled).ToListAsync());
 
-        [HttpGet("{id}/bookings")]
+        [HttpGet("admin/all")]
+        [Authorize(Roles = "operator")]
+        public async Task<IActionResult> GetAllIncludingDisabled() => Ok(await _db.Courts.Include(c => c.Location).ToListAsync());
+
+        [HttpGet("{id:int}/bookings")]
         [AllowAnonymous]
         public async Task<IActionResult> GetBookings(int id, [FromQuery] string date)
         {
@@ -54,7 +67,7 @@ namespace Backend.Controllers
             return CreatedAtAction(nameof(GetAll), court);
         }
 
-        [HttpPut("{id}")]
+        [HttpPut("{id:int}")]
         [Authorize(Roles = "operator")]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateCourtRequest req)
         {
@@ -74,7 +87,7 @@ namespace Backend.Controllers
             return Ok(court);
         }
 
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:int}")]
         [Authorize(Roles = "operator")]
         public async Task<IActionResult> Delete(int id)
         {
@@ -84,6 +97,69 @@ namespace Backend.Controllers
             await _db.SaveChangesAsync();
             return Ok();
         }
+
+        // Blackout date endpoints
+        [HttpOptions("{courtId}/blackouts")]
+        [AllowAnonymous]
+        public IActionResult BlackoutPreflight(int courtId)
+        {
+            return Ok();
+        }
+
+        [HttpOptions("{courtId}/blackouts/{blackoutId}")]
+        [AllowAnonymous]
+        public IActionResult BlackoutDeletePreflight(int courtId, int blackoutId)
+        {
+            return Ok();
+        }
+
+        [HttpGet("{courtId}/blackouts")]
+        [Authorize(Roles = "operator")]
+        public async Task<IActionResult> GetBlackoutDates(int courtId)
+        {
+            var blackouts = await _db.CourtBlackoutDates.Where(b => b.CourtId == courtId).OrderBy(b => b.DateStart).ToListAsync();
+            return Ok(blackouts);
+        }
+
+        [HttpPost("{courtId}/blackouts")]
+        [Authorize(Roles = "operator")]
+        public async Task<IActionResult> CreateBlackoutDate(int courtId, [FromBody] CreateBlackoutDateRequest req)
+        {
+            var court = await _db.Courts.FindAsync(courtId);
+            if (court == null) return NotFound("Court not found");
+
+            if (req.DateStart >= req.DateEnd) return BadRequest("DateStart must be before DateEnd");
+
+            var blackout = new CourtBlackoutDate 
+            { 
+                CourtId = courtId, 
+                DateStart = req.DateStart, 
+                DateEnd = req.DateEnd, 
+                Reason = req.Reason 
+            };
+            _db.CourtBlackoutDates.Add(blackout);
+            await _db.SaveChangesAsync();
+            return CreatedAtAction(nameof(GetBlackoutDates), new { courtId }, blackout);
+        }
+
+        [HttpDelete("{courtId}/blackouts/{blackoutId}")]
+        [Authorize(Roles = "operator")]
+        public async Task<IActionResult> DeleteBlackoutDate(int courtId, int blackoutId)
+        {
+            var blackout = await _db.CourtBlackoutDates.FindAsync(blackoutId);
+            if (blackout == null || blackout.CourtId != courtId) return NotFound();
+
+            _db.CourtBlackoutDates.Remove(blackout);
+            await _db.SaveChangesAsync();
+            return Ok();
+        }
+    }
+
+    public class CreateBlackoutDateRequest
+    {
+        public DateTime DateStart { get; set; }
+        public DateTime DateEnd { get; set; }
+        public string Reason { get; set; }
     }
 
     public class CreateCourtRequest

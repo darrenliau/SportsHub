@@ -5,18 +5,29 @@ export interface BookingDialogProps {
   open: boolean;
   initialStart?: Date;
   initialEnd?: Date;
+  username?: string;
   onClose: () => void;
   onSave: (data: { title: string; start: Date; end: Date }) => void;
 }
 
-export default function BookingDialog({ open, initialStart, initialEnd, onClose, onSave }: BookingDialogProps) {
-  const [title, setTitle] = useState('Badminton booking');
-  const [start, setStart] = useState(initialStart ? initialStart.toISOString().slice(0,16) : new Date().toISOString().slice(0,16));
-  const [end, setEnd] = useState(initialEnd ? initialEnd.toISOString().slice(0,16) : new Date(Date.now()+60*60*1000).toISOString().slice(0,16));
+export default function BookingDialog({ open, initialStart, initialEnd, username, onClose, onSave }: BookingDialogProps) {
+  const title = username || 'Booking';
+  
+  const formatLocalDateTime = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  const [start, setStart] = useState(initialStart ? formatLocalDateTime(initialStart) : formatLocalDateTime(new Date()));
+  const [end, setEnd] = useState(initialEnd ? formatLocalDateTime(initialEnd) : formatLocalDateTime(new Date(Date.now()+60*60*1000)));
 
   React.useEffect(()=>{
-    if(initialStart) setStart(initialStart.toISOString().slice(0,16));
-    if(initialEnd) setEnd(initialEnd.toISOString().slice(0,16));
+    if(initialStart) setStart(formatLocalDateTime(initialStart));
+    if(initialEnd) setEnd(formatLocalDateTime(initialEnd));
   },[initialStart, initialEnd, open]);
 
   const handleSave = () => {
@@ -30,7 +41,6 @@ export default function BookingDialog({ open, initialStart, initialEnd, onClose,
     <Dialog open={open} onClose={onClose}>
       <DialogTitle>Create booking</DialogTitle>
       <DialogContent>
-        <TextField fullWidth label="Title" value={title} onChange={e=>setTitle(e.target.value)} margin="dense" />
         <TextField
           fullWidth
           type="datetime-local"
