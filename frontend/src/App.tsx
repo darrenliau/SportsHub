@@ -134,7 +134,7 @@ export default function App() {
         ) : view === 'management' ? (
           <ManagementDashboard />
         ) : (
-          <BookingDashboard onDelete={loadBookings} />
+          <BookingDashboard user={user} onDelete={loadBookings} />
         )}
       </Box>
 

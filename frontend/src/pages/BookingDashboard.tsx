@@ -3,13 +3,15 @@ import { Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, 
 import DeleteIcon from '@mui/icons-material/Delete'
 import { fetchBookings, deleteBooking } from '../services/api'
 
-type Booking = { id: string; title: string; start: string; end: string; courtId: number; status: string }
+type Booking = { id: string; title: string; start: string; end: string; courtId: number; userId: number; status: string }
+type User = { id: number; username: string; role: string }
 
 interface BookingDashboardProps {
+  user: User | null
   onDelete: () => void
 }
 
-export default function BookingDashboard({ onDelete }: BookingDashboardProps) {
+export default function BookingDashboard({ user, onDelete }: BookingDashboardProps) {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(0)
@@ -30,6 +32,11 @@ export default function BookingDashboard({ onDelete }: BookingDashboardProps) {
     } finally {
       setLoading(false)
     }
+  }
+
+  const canCancelBooking = (booking: Booking): boolean => {
+    if (!user) return false
+    return booking.userId === user.id || user.role === 'operator'
   }
 
   const handleDeleteBooking = async (bookingId: string) => {
@@ -90,14 +97,20 @@ export default function BookingDashboard({ onDelete }: BookingDashboardProps) {
                     <TableCell>{new Date(booking.end).toLocaleString()}</TableCell>
                     <TableCell>{booking.courtId}</TableCell>
                     <TableCell>
-                      <Button
-                        size="small"
-                        color="error"
-                        startIcon={<DeleteIcon />}
-                        onClick={() => handleDeleteBooking(booking.id)}
-                      >
-                        Cancel
-                      </Button>
+                      {canCancelBooking(booking) ? (
+                        <Button
+                          size="small"
+                          color="error"
+                          startIcon={<DeleteIcon />}
+                          onClick={() => handleDeleteBooking(booking.id)}
+                        >
+                          Cancel
+                        </Button>
+                      ) : (
+                        <Typography variant="body2" sx={{ color: '#999' }}>
+                          No actions
+                        </Typography>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

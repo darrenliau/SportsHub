@@ -14,6 +14,10 @@ namespace Backend.Models
         public Court Court { get; set; }
 
         [Required]
+        public int UserId { get; set; }
+        public User User { get; set; }
+
+        [Required]
         public DateTime Start { get; set; }
         [Required]
         public DateTime End { get; set; }
