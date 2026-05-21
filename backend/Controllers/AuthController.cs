@@ -99,12 +99,30 @@ namespace backend.Controllers
             var user = _db.Users.SingleOrDefault(u => u.Id == rt.UserId);
             if (user == null) return Unauthorized("User not found");
 
+            // revoke old refresh token
+            rt.Revoked = true;
+
+            // create new refresh token
+            var newRefreshToken = new RefreshToken
+            {
+                Token = GenerateRefreshTokenString(),
+                UserId = user.Id,
+                CreatedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddDays(int.TryParse(_config["Jwt:RefreshTokenDays"], out var d) ? d : 7)
+            };
+            _db.RefreshTokens.Add(newRefreshToken);
+            _db.SaveChanges();
+
             var accessToken = GenerateJwtToken(user);
             var minutes = int.TryParse(_config["Jwt:AccessTokenMinutes"], out var m) ? m : 15;
 
             // update access token cookie
             var accessCookieOptions = new CookieOptions { HttpOnly = true, Expires = DateTime.UtcNow.AddMinutes(minutes), SameSite = SameSiteMode.Lax, Secure = false };
             Response.Cookies.Append("accessToken", accessToken, accessCookieOptions);
+
+            // update refresh token cookie with new token
+            var refreshCookieOptions = new CookieOptions { HttpOnly = true, Expires = newRefreshToken.ExpiresAt, SameSite = SameSiteMode.Lax, Secure = false };
+            Response.Cookies.Append("refreshToken", newRefreshToken.Token, refreshCookieOptions);
 
             return Ok(new { user = new { user.Id, user.Username, user.Email, user.Role } });
         }

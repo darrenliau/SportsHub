@@ -27,7 +27,10 @@ namespace backend
             {
                 options.AddPolicy("AllowDev", builder =>
                 {
-                    builder.WithOrigins("http://localhost:5173", "http://localhost:5174").AllowAnyHeader().AllowAnyMethod();
+                    builder.WithOrigins("http://localhost:5173", "http://localhost:5174")
+                           .AllowAnyHeader()
+                           .AllowAnyMethod()
+                           .AllowCredentials();
                 });
             });
 

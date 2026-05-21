@@ -4,20 +4,24 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Backend.Data;
 using Backend.Models;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Backend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class CourtsController : ControllerBase
     {
         private readonly AppDbContext _db;
         public CourtsController(AppDbContext db) { _db = db; }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> GetAll() => Ok(await _db.Courts.Include(c => c.Location).Where(c => c.Enabled).ToListAsync());
 
         [HttpGet("{id}/bookings")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetBookings(int id, [FromQuery] string date)
         {
             var q = _db.Bookings.Where(b => b.CourtId == id);
@@ -35,6 +39,7 @@ namespace Backend.Controllers
 
         // Admin endpoints
         [HttpPost]
+        [Authorize(Roles = "operator")]
         public async Task<IActionResult> Create([FromBody] CreateCourtRequest req)
         {
             if (string.IsNullOrEmpty(req.CourtName)) return BadRequest("CourtName required");
@@ -50,6 +55,7 @@ namespace Backend.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "operator")]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateCourtRequest req)
         {
             var court = await _db.Courts.FindAsync(id);
@@ -69,6 +75,7 @@ namespace Backend.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "operator")]
         public async Task<IActionResult> Delete(int id)
         {
             var court = await _db.Courts.FindAsync(id);
